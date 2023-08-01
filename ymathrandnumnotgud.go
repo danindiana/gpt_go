@@ -1,5 +1,4 @@
 //Write a program in go which attacks the "math/rand" pseudo random library. The output should explain why this library fails to produce durable random numbers.
-
 package main
 
 import (
