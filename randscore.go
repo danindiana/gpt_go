@@ -1,5 +1,4 @@
 //Write a go program which reads random strings from a text file and determines their degree of randomness.
-
 package main
 
 import (
