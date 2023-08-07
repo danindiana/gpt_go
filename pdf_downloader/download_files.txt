@@ -1,0 +1,41 @@
+Sure! Let's go through the Go program step by step to understand how it works:
+
+1. The program starts by defining the main package in Go, which is necessary to create an executable program.
+
+2. It imports required packages: "bufio" for reading the link text document line by line, "fmt" for basic input/output operations, "io" for file input/output, "net/http" for HTTP requests, and "os" for file system operations.
+
+3. In the main function, the program prompts the user to enter the path to the text document containing the links by using the `fmt.Scanln()` function to read user input from the console.
+
+4. The program defines a target directory named "downloads," where the downloaded files will be saved.
+
+5. It creates the "downloads" directory if it doesn't already exist using the `os.MkdirAll()` function. The `0755` permission ensures that the directory is readable, writable, and executable by the owner, and readable and executable by others.
+
+6. The program opens the link file for reading using `os.Open()` and stores the file descriptor in the `file` variable. If there's an error opening the file, it displays an error message and exits the program.
+
+7. It uses the `defer` statement to ensure that the file is closed after the function exits, even if there is an error.
+
+8. The program creates a `bufio.Scanner` to read the link text file line by line.
+
+9. For each line in the link file, the program trims any leading or trailing whitespaces using `strings.TrimSpace()`. If the line is empty, it continues to the next line.
+
+10. The `getFileName()` function is called to extract the filename from the URL. The function uses `strings.Split()` to split the URL based on '/' and returns the last element (file name).
+
+11. The `getFileName()` function is a helper function to extract the file name from the URL.
+
+12. The program appends ".pdf" to the file name to ensure that the downloaded files are saved with the '.pdf' file extension regardless of the original file type.
+
+13. The program creates the `filePath` by joining the target directory and the file name with ".pdf" extension using `filepath.Join()`.
+
+14. The program calls the `downloadFile()` function to download the file from the given URL and save it with the specified file path.
+
+15. If there is an error during file download, the program displays an error message and continues to the next line.
+
+16. If the file is downloaded successfully, the program displays a message confirming the download and the saved file path.
+
+17. The program checks for any error that may have occurred during the scanning process using `scanner.Err()`.
+
+18. If there is an error, it displays an error message.
+
+19. The program finishes execution.
+
+In summary, the Go program prompts the user to enter the path to a text document containing URLs of files to be downloaded. It then reads the URLs, downloads the corresponding files, and saves them with the '.pdf' file extension in the "downloads" directory.
