@@ -1,0 +1,17 @@
+Sure! Let's go through the program step by step to understand how it works:
+
+1. The program starts by defining a `fileData` struct to hold information about each file, including its path, size, and MD5 hash.
+
+2. The `calculateHash` function takes the file path as input and calculates the MD5 hash of the file using the `crypto/md5` package. It reads the file content, computes the hash, and returns it as a hexadecimal string.
+
+3. The `findDuplicates` function is responsible for finding duplicate files in a specified directory. It uses the `calculateHash` function to calculate the MD5 hash of each file and stores the file data in the `duplicateFiles` map, using the MD5 hash as the key. This map stores a slice of `fileData` for each unique MD5 hash.
+
+4. The `main` function is the entry point of the program. It prompts the user to enter the target disk/directory to scan and whether to run the scan recursively. The user's input is then used to call the `findDuplicates` function to identify the duplicate files.
+
+5. The program asks the user to enter the output file name to store the results of the scan.
+
+6. It then creates the output file and writes information about duplicate files to it. For each set of duplicate files, it prints the path and MD5 hash of each file to the console and writes the same information to the output file in the specified format.
+
+7. After processing all duplicate files, the program prints "Scan completed." and suggests the output file name.
+
+Overall, the program reads user inputs for the target directory and whether to scan recursively. It then identifies duplicate files in the directory, calculates their MD5 hashes, and outputs the duplicate file information to both the console and an output file. The program uses MD5 hashing to detect duplicate files based on their content.
