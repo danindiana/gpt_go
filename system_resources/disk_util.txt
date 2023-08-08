@@ -1,0 +1,39 @@
+Certainly! This code is a program that uses the console to display the system's RAM utilization and the disk utilization for each available disk drive. Below is a step-by-step explanation:
+
+1. **Imported Libraries**:
+   - Various libraries are imported to help with functionality. These libraries allow for string manipulation, system calls, random number generation, etc. There are also two external packages, `github.com/inancgumus/screen` and `github.com/shirou/gopsutil/mem`, which are used for managing the console screen and gathering RAM statistics, respectively.
+
+2. **`main` function**:
+   - `screen.Clear()`: The console screen is cleared to provide a fresh start.
+   
+   - The infinite `for` loop ensures the program keeps running, continuously updating the RAM and disk utilization statistics.
+   
+   - `screen.MoveTopLeft()`: This moves the console cursor to the top-left corner, effectively allowing the program to "overwrite" previous output with new data.
+   
+   - `v, err := mem.VirtualMemory()`: This function fetches RAM statistics. The percentage of used RAM is stored in `v.UsedPercent`.
+   
+   - RAM Utilization is printed using `fmt.Printf(...)`. It displays a bar (using the `generateBar` function) representing the percentage of used RAM and the actual percentage.
+   
+   - The program then fetches the names of all disk drives on the system using `getDriveNames()`.
+   
+   - Random disk usage percentages are generated for each disk drive using the `generateRandomDiskUsage` function. In a real-world scenario, you'd replace this with actual disk usage statistics.
+   
+   - For each disk drive, the program prints its name, a bar representing its (randomly generated) utilization, and the actual percentage.
+   
+   - The program then waits for 2 seconds using `time.Sleep(2 * time.Second)` before starting the loop again.
+
+3. **`generateBar` function**:
+   - This function takes in a percentage (0 to 100) and returns a string representation of a bar.
+   - It calculates how many "filled" sections (using the `█` character) the bar should have based on the given percentage and fills the rest with spaces.
+   
+4. **`generateRandomDiskUsage` function**:
+   - This function returns an array of random percentages (between 0 and 100). It's used to simulate disk utilization for each disk drive.
+   
+5. **`getDriveNames` function**:
+   - This function interacts with Windows' system calls to fetch the names of all disk drives on the system.
+   
+   - It uses the `syscall` package to load the `kernel32.dll` library and then locates the `GetLogicalDriveStringsW` procedure. This procedure is used to get the names of all logical drives.
+   
+   - The fetched drive names are then decoded and split into a string slice. This slice of drive names is returned to the caller.
+
+Overall, this program provides a visual representation of RAM and disk utilization statistics in the console. It continuously updates this data every 2 seconds, giving a dynamic view of system performance. However, note that disk usage is randomly generated in this code; in a real-world application, you would fetch actual disk usage data.
