@@ -1,0 +1,42 @@
+This Go program is a web crawler that starts from a given URL and recursively crawls through the links on the web pages it encounters. It uses the `colly` library for web scraping and `net/http` for downloading files.
+
+Here's a step-by-step analysis of the program:
+
+1. **Import Packages**: The program begins by importing necessary packages from the standard library and external libraries (`colly`).
+
+2. **Global Variables**:
+   - `visitedURLs`: A map that keeps track of visited URLs to avoid revisiting them.
+   - `visitedURLsMutex`: A mutex to ensure thread-safe access to `visitedURLs`.
+   - `excludedDomains`: A list of domain names that are excluded from crawling.
+
+3. **`main` Function**:
+   - The user is prompted to enter a starting URL to begin crawling.
+   - A new `colly` collector (`c`) is created with asynchronous processing enabled.
+   - The collector's parallelism is set to 15 using `LimitRule`.
+
+4. **`OnRequest` Callback**:
+   - The `OnRequest` callback is executed whenever a request is about to be made.
+   - It simply prints the URL that is being visited.
+
+5. **`OnHTML` Callback (Links)**:
+   - The `OnHTML` callback is executed whenever an HTML element with an `href` attribute (a link) is encountered.
+   - The link is parsed using the `url` package, and the domain is checked against the `excludedDomains` list. If the domain is excluded, the link is skipped.
+   - The absolute URL is calculated using `e.Request.AbsoluteURL(link)`.
+   - If the absolute URL has not been visited before, the URL is added to the `visitedURLs` map, and the link is visited using `e.Request.Visit(link)`.
+
+6. **`OnHTML` Callback (PDF Files)**:
+   - The `OnHTML` callback is executed whenever an HTML element with an `href` attribute that ends with `.pdf` is encountered.
+   - The PDF file's URL is converted to an absolute URL using `e.Request.AbsoluteURL(e.Attr("href"))`.
+   - The `downloadFile` function is called to download the PDF file.
+
+7. **`downloadFile` Function**:
+   - This function is responsible for downloading files from a given URL.
+   - It sends an HTTP GET request to the provided URL using `http.Get`.
+   - The response body is read and copied to a local file using `io.Copy`.
+   - The local file's name is extracted from the URL and used for saving the downloaded file.
+
+8. **Starting Crawling**:
+   - The program starts crawling by calling `c.Visit(startingURL)`.
+   - It then waits for all asynchronous operations to complete using `c.Wait()`.
+
+In summary, this program utilizes the `colly` library to perform web scraping and crawling starting from a user-provided URL. It follows links on web pages, excluding certain domains, and downloads PDF files it encounters. The use of mutex ensures that the `visitedURLs` map is accessed safely in a multi-threaded environment.
