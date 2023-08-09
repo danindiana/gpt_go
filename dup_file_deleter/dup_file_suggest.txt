@@ -1,0 +1,189 @@
+This is a well-organized program for finding duplicate files in a directory based on their MD5 hash. However, there are some areas of potential improvement.
+
+1. **Worker Pool Implementation**: Your worker pool implementation launches a new goroutine for each file and directory. With a very large number of files and directories, this might lead to a large number of goroutines being scheduled concurrently, which can lead to contention and potentially inefficient memory usage. It's better to use a fixed number of worker goroutines that pick tasks from channels.
+
+2. **Reducing Hash Computations**: Before computing the MD5 hash, you might want to initially group files by their sizes. Files with unique sizes are automatically not duplicates, so no need to compute their hash. Only compute the MD5 hash for files with sizes that appear more than once.
+
+3. **Error Handling in main()**: Errors from `reader.ReadString` are ignored. They should be handled.
+
+4. **Buffering**: You have correctly used buffered IO for writing results. But it would also be beneficial to use buffered IO for reading files when calculating their hash.
+
+5. **MD5**: While MD5 is fast, it's considered cryptographically broken and unsuitable for further use. For checking file duplicates, it might still be adequate. However, if you're ever worried about collisions, consider using SHA-256.
+
+6. **Waiting for Goroutines**: Instead of manually handling channels and synchronization primitives, you might want to use `sync.WaitGroup` more extensively to wait for the completion of goroutines.
+
+7. **Constant Buffer Sizes**: Using hardcoded constants like 4096 for buffer size or 100 for worker count may not be the most optimal for all scenarios. Consider parameterizing these or computing them based on system resources.
+
+8. **Displaying Results**: You're currently writing results to both standard output and a file, which might be redundant. Depending on your use case, you could make this optional.
+
+9. **Closing Results Channel**: You need to close the `results` channel after sending all results to indicate to the `displayResults` function that no more data will be sent.
+
+10. **Setting GOMAXPROCS**: In recent Go versions, the default value of GOMAXPROCS is the number of CPU cores available, so there's no need to set it manually.
+
+11. **Reducing Lock Contention**: Instead of locking around map access for every file, consider having each worker goroutine compute results independently and then merge the results at the end, reducing lock contention.
+
+Considering the above suggestions, a sample refactoring might be too extensive to detail here. However, I've highlighted the key areas you should consider when optimizing this code. If you would like a detailed code refactoring or if you have other questions, please let me know!
+
+
+
+package main
+
+import (
+	"bufio"
+	"crypto/md5"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+)
+
+type fileData struct {
+	Path string
+	Size int64
+	Hash string
+}
+
+const workerCount = 100 // Adjust the number of worker goroutines as needed.
+
+func calculateHash(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hash := md5.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func findDuplicates(rootDir string, recursive bool, results chan<- []fileData) {
+	duplicateFiles := make(map[string][]fileData)
+	var mutex sync.Mutex
+
+	workerPool := make(chan struct{}, workerCount)
+
+	var scanDirectory func(string)
+	scanDirectory = func(dir string) {
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			fmt.Println("Error:", err)
+			return
+		}
+
+		for _, file := range files {
+			if file.IsDir() && recursive {
+				workerPool <- struct{}{}
+				go func() {
+					defer func() { <-workerPool }()
+					scanDirectory(filepath.Join(dir, file.Name()))
+				}()
+			} else if !file.IsDir() {
+				workerPool <- struct{}{}
+				go func(f os.DirEntry) {
+					defer func() { <-workerPool }()
+					path := filepath.Join(dir, f.Name())
+					info, err := f.Info()
+					if err != nil {
+						fmt.Println("Error:", err)
+						return
+					}
+
+					hash, err := calculateHash(path)
+					if err != nil {
+						fmt.Println("Error:", err)
+						return
+					}
+
+					size := info.Size()
+					mutex.Lock()
+					defer mutex.Unlock()
+					duplicateFiles[hash] = append(duplicateFiles[hash], fileData{
+						Path: path,
+						Size: size,
+						Hash: hash,
+					})
+				}(file)
+			}
+		}
+	}
+
+	scanDirectory(rootDir)
+
+	var duplicates []fileData
+	for _, files := range duplicateFiles {
+		if len(files) > 1 {
+			duplicates = append(duplicates, files...)
+		}
+	}
+
+	results <- duplicates
+}
+
+func displayResults(results <-chan []fileData, outputFileName string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	fmt.Println("Duplicate files found:")
+
+	outputFile, err := os.Create(outputFileName)
+	if err != nil {
+		fmt.Println("Error creating the output file:", err)
+		return
+	}
+	defer outputFile.Close()
+
+	writer := bufio.NewWriterSize(outputFile, 4096) // Adjust the buffer size as needed.
+	for duplicates := range results {
+		if duplicates != nil {
+			for _, file := range duplicates {
+				fmt.Println(file.Path)
+				writer.WriteString(fmt.Sprintf("MD5: %s\nPath: %s\n\n", file.Hash, file.Path))
+			}
+			fmt.Println("-----")
+		}
+	}
+
+	writer.Flush()
+}
+
+func main() {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Enter the target disk/directory to scan: ")
+	targetDir, _ := reader.ReadString('\n')
+	targetDir = strings.TrimSpace(targetDir)
+
+	fmt.Print("Do you wish to run the scan recursively? (y/n): ")
+	recursiveStr, _ := reader.ReadString('\n')
+	recursiveStr = strings.TrimSpace(recursiveStr)
+	recursive := strings.ToLower(recursiveStr) == "y"
+
+	fmt.Print("Enter the output file name: ")
+	outputFileName, _ := reader.ReadString('\n')
+	outputFileName = strings.TrimSpace(outputFileName)
+
+	runtime.GOMAXPROCS(runtime.NumCPU()) // Set the number of CPU cores to use.
+
+	results := make(chan []fileData)
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go findDuplicates(targetDir, recursive, results)
+
+	fmt.Println("Scanning... Press Ctrl+C to stop the scan.")
+
+	go displayResults(results, outputFileName, &wg)
+
+	// Wait for the scan to complete and displayResults to finish.
+	wg.Wait()
+
+	fmt.Println("Scan completed.")
+	fmt.Println("Results written to:", outputFileName)
+}
