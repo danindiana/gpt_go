@@ -40,3 +40,120 @@ Here's a step-by-step analysis of the program:
    - It then waits for all asynchronous operations to complete using `c.Wait()`.
 
 In summary, this program utilizes the `colly` library to perform web scraping and crawling starting from a user-provided URL. It follows links on web pages, excluding certain domains, and downloads PDF files it encounters. The use of mutex ensures that the `visitedURLs` map is accessed safely in a multi-threaded environment.
+
+The increasing RAM utilization of the program over time could be due to a phenomenon called "memory leak." A memory leak occurs when a program does not release memory that it no longer needs, causing the program's memory usage to grow over time. In this case, there are a few potential reasons why the program's RAM utilization might increase as it runs:
+
+1. **Map `visitedURLs` Accumulation**: The program keeps track of visited URLs in the `visitedURLs` map. If the map continues to grow without removing URLs that are no longer needed, it can lead to a memory leak. The program should consider periodically cleaning up the map to remove URLs that are no longer relevant.
+
+2. **Mutex Handling**: The program uses a mutex (`visitedURLsMutex`) to ensure thread-safe access to the `visitedURLs` map. If there are issues with how the mutex is used, such as not releasing it properly after accessing the map, it could lead to memory leaks.
+
+3. **Goroutine Management**: The program uses goroutines for asynchronous crawling and scraping. If goroutines are not managed properly, they might not be properly cleaned up after they're done, leading to memory leaks.
+
+4. **Resource Leaks**: The program interacts with external resources like network connections and file I/O. If these resources are not properly closed or released, they can lead to memory leaks over time.
+
+5. **Third-Party Libraries**: The `colly` library and other third-party dependencies might have memory management issues that could contribute to memory leaks.
+
+To address this issue, you can consider the following steps:
+
+- **Monitor Memory Usage**: Use monitoring tools or profilers to track the program's memory usage over time. This can help you identify which parts of the code are causing the memory growth.
+
+- **Review Map Usage**: Review how the `visitedURLs` map is used. Ensure that URLs that are no longer needed are removed from the map. Consider implementing a mechanism to limit the map's size or periodically clean up old entries.
+
+- **Check Mutex Usage**: Review how the mutex is used in the program. Make sure it's properly locked and unlocked to avoid deadlocks and ensure that resources are released.
+
+- **Review Goroutines**: Verify that goroutines are being managed properly and are not being created unnecessarily. Ensure they are being properly terminated when they are no longer needed.
+
+- **Check External Resource Handling**: Make sure that network connections and file handles are properly closed after use.
+
+- **Update Dependencies**: If the issue is related to third-party libraries, check if there are updates available for the libraries you're using. Newer versions might address memory leak issues.
+
+- **Memory Profiling**: Use Go's built-in memory profiling tools to analyze memory allocations and identify potential memory leaks.
+
+By thoroughly reviewing and addressing these aspects of the program, you can mitigate memory leaks and ensure that the program's memory utilization remains stable over time.
+
+Please suggest a method for implementing a mechanism to limit the map's size or periodically clean up old entries.
+
+ChatGPT
+
+Implementing a mechanism to limit the map's size or periodically clean up old entries in the `visitedURLs` map can help prevent excessive memory consumption. Here's a suggested approach:
+
+1. **Using a Time-Based Expiry**:
+
+   You can set a time-based expiration for each visited URL entry in the map. After a certain duration, URLs that have been visited more than a specified time ago can be removed from the map. This ensures that only recently visited URLs are retained.
+
+   Here's a basic outline of how you might implement this:
+
+   ```go
+   import (
+       "sync"
+       "time"
+   )
+
+   // ...
+
+   var (
+       visitedURLs      = make(map[string]time.Time)
+       visitedURLsMutex = &sync.Mutex{}
+       expirationDuration = 24 * time.Hour // Example: URLs expire after 24 hours
+   )
+
+   // ...
+
+   c.OnHTML("a[href]", func(e *colly.HTMLElement) {
+       // ...
+
+       visitedURLsMutex.Lock()
+       if lastVisited, found := visitedURLs[absoluteURL]; !found || time.Since(lastVisited) > expirationDuration {
+           visitedURLs[absoluteURL] = time.Now()
+           e.Request.Visit(link)
+       }
+       visitedURLsMutex.Unlock()
+   })
+   ```
+
+   In this example, the `visitedURLs` map stores URLs along with their last visited time. If a URL is not found in the map or if it has expired, it is added to the map with the current time and then visited.
+
+2. **Using a LRU Cache**:
+
+   Another approach is to use a Least Recently Used (LRU) cache to limit the number of URLs stored in the map. When the cache reaches its capacity, the least recently used URLs are automatically removed to make space for new URLs.
+
+   You can use the `github.com/hashicorp/golang-lru` library to implement an LRU cache. Here's an example:
+
+   ```go
+   import (
+       // ...
+       lru "github.com/hashicorp/golang-lru"
+   )
+
+   // ...
+
+   var (
+       visitedURLsCache *lru.Cache
+       cacheCapacity    = 1000 // Example: Cache capacity of 1000 URLs
+   )
+
+   // ...
+
+   func main() {
+       // ...
+       visitedURLsCache, _ = lru.New(cacheCapacity)
+       // ...
+   }
+
+   // ...
+
+   c.OnHTML("a[href]", func(e *colly.HTMLElement) {
+       // ...
+
+       visitedURLsMutex.Lock()
+       if !visitedURLsCache.Contains(absoluteURL) {
+           visitedURLsCache.Add(absoluteURL, nil)
+           e.Request.Visit(link)
+       }
+       visitedURLsMutex.Unlock()
+   })
+   ```
+
+   In this example, the `golang-lru` library is used to manage an LRU cache. URLs are added to the cache, and if the cache is full, the least recently used URLs are automatically evicted when new URLs are added.
+
+Both of these methods help you control the size of the `visitedURLs` map and prevent excessive memory consumption. Choose the approach that best suits your program's requirements and complexity.
