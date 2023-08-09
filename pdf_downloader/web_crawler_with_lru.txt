@@ -1,0 +1,180 @@
+Certainly! Let's break down the `web_crawler_with_lru.go` step by step:
+
+### 1. Package and Imports
+```go
+package main
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"sync"
+
+	"github.com/gocolly/colly"
+	lru "github.com/hashicorp/golang-lru"
+)
+```
+- We declare the package as `main` since this is an executable Go program.
+- We import the required standard Go packages and third-party packages, notably `colly` (for web scraping) and `golang-lru` (for implementing LRU cache).
+
+### 2. Global Variables
+```go
+var (
+	visitedURLsCache  *lru.Cache
+	cacheCapacity     = 1000
+	visitedURLsMutex  = &sync.Mutex{}
+	excludedDomains   = []string{"facebook", "youtube", "reddit", "linkedin"}
+)
+```
+- `visitedURLsCache` is the LRU cache that will store URLs visited by the crawler.
+- `cacheCapacity` sets the size limit for the LRU cache.
+- `visitedURLsMutex` is a mutex used to ensure thread-safe operations on the LRU cache.
+- `excludedDomains` is a slice containing domains we want to exclude from our crawl.
+
+### 3. The main function
+The `main()` function carries out the following tasks:
+- Prompts the user for a starting URL.
+- Initializes a web scraper using the `colly` package.
+- Initializes the LRU cache.
+- Defines how the web scraper should behave when it encounters URLs and PDF links.
+- Begins the scraping process.
+
+### 4. Prompting the user
+```go
+var startingURL string
+fmt.Println("Enter the starting URL to crawl: ")
+fmt.Scanln(&startingURL)
+```
+- We prompt the user to enter a starting URL, which the web scraper will start crawling from.
+
+### 5. Setting up the web scraper
+```go
+c := colly.NewCollector(
+	colly.Async(true),
+)
+c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: 15})
+c.OnRequest(func(r *colly.Request) {
+	fmt.Println("Visiting", r.URL.String())
+})
+```
+- A new `colly` collector (scraper) is created with asynchronous capability.
+- We set a rate limit for the scraper to avoid overwhelming servers.
+- The `OnRequest` function logs every URL that the scraper visits.
+
+### 6. Initializing the LRU Cache
+```go
+var err error
+visitedURLsCache, err = lru.New(cacheCapacity)
+if err != nil {
+	fmt.Println("Error initializing LRU cache:", err)
+	return
+}
+```
+- We create the LRU cache with a defined capacity. If there's an error during initialization, it will be logged.
+
+### 7. Defining Scraper's Behavior
+```go
+c.OnHTML("a[href]", func(e *colly.HTMLElement) {
+    ...
+}
+```
+- For every hyperlink (`a[href]`) encountered by the scraper:
+  - The URL is parsed and checked against `excludedDomains` to see if we should skip it.
+  - We check the LRU cache to determine if we've already visited this URL. If not, the URL is added to the cache, and the scraper is instructed to visit it.
+
+```go
+c.OnHTML("a[href$='.pdf']", func(e *colly.HTMLElement) {
+    ...
+}
+```
+- For every hyperlink ending in `.pdf`:
+  - We attempt to download the linked PDF file using the `downloadFile` function.
+
+### 8. Starting the Scraper
+```go
+c.Visit(startingURL)
+c.Wait()
+```
+- We instruct the scraper to start its crawl from the `startingURL` provided by the user.
+- `c.Wait()` ensures the main function does not exit until all asynchronous scraping tasks are complete.
+
+### 9. Downloading PDF Files
+The `downloadFile()` function is used to download PDF files linked on the pages visited. It takes a URL, sends an HTTP request to fetch the content, and then saves the content to a local file.
+
+### Conclusion
+The program is a web crawler that:
+1. Starts crawling from a user-defined URL.
+2. Visits all encountered URLs, excluding certain domains.
+3. Downloads all encountered PDF files.
+4. Uses an LRU cache to limit the number of URLs it remembers, ensuring efficient memory usage.
+
+This is a basic web scraper, and there are many possible enhancements, including handling more types of content, dealing with web scraping challenges (like bot blockers), improving performance, etc.
+
+
+Explain how web_crawler_with_lru.go flushes the LRU cache.
+
+The LRU (Least Recently Used) cache mechanism implemented in `web_crawler_with_lru.go` using the `github.com/hashicorp/golang-lru` library automatically handles the flushing of the cache when it reaches its maximum capacity. 
+
+To explain more clearly:
+
+When an LRU cache reaches its defined capacity (`cacheCapacity` in this case), and a new item needs to be added, the cache will evict or "flush" the least recently used item to make space for the new item. This eviction process ensures the cache never exceeds its defined capacity.
+
+In `web_crawler_with_lru.go`:
+
+1. The LRU cache is initialized with a capacity of 1000 URLs:
+```go
+visitedURLsCache, err = lru.New(cacheCapacity)
+```
+
+2. Whenever a new URL is encountered during the web crawling process, the program checks if the URL already exists in the cache:
+```go
+if !visitedURLsCache.Contains(absoluteURL) {
+    visitedURLsCache.Add(absoluteURL, nil)
+    ...
+}
+```
+
+3. If the URL doesn't exist in the cache, the code adds the URL to the cache using the `Add` method.
+
+When adding a URL:
+
+- If the cache hasn't reached its capacity, the URL is just added without any eviction.
+- If the cache has reached its capacity, the least recently used URL is automatically evicted from the cache to make space for the new URL. This eviction is handled internally by the `golang-lru` library and ensures the cache size remains at the defined capacity.
+
+It's worth noting that "flushing" in the context of an LRU cache usually refers to this eviction of the least recently used items. The cache doesn't get emptied or "flushed" in its entirety. Only the least recently used items are evicted as needed.
+
+
+Certainly! While the LRU cache is designed to prevent the `visitedURLsCache` from growing indefinitely, there are several other aspects of the program and the libraries it uses that could contribute to the memory growth.
+
+1. **Underlying Data Structures**: The `golang-lru` library uses additional data structures internally to manage the cache efficiently. This includes both a map for constant-time lookups and a double-linked list for maintaining the order of usage. These structures come with their own memory overhead.
+
+2. **Concurrency & `colly`**: The `colly` package uses goroutines to achieve its asynchronous behavior (`colly.Async(true)`). If there are many URLs to crawl, a large number of goroutines might be created, each with its stack space, contributing to increased memory usage.
+
+3. **Goroutines Backlog**: If the system can't process URLs as quickly as they're being added to the work queue (especially with the specified parallelism of 15), you can have a backlog of goroutines, each consuming memory.
+
+4. **HTTP Response Buffers**: The `downloadFile` function uses `http.Get(URL)` to fetch content. This means an HTTP client is created, and it buffers the response data. If many large files are being downloaded, this could lead to a temporary spike in memory usage.
+
+5. **Incomplete Garbage Collection**: Go uses a garbage collector to reclaim unused memory. If there's a rapid allocation of short-lived objects, the garbage collector might not keep up, leading to a temporary increase in memory usage. Over time, the garbage collector should catch up and release the memory.
+
+6. **Potential Memory Leaks**: There might be memory leaks either in the code or in the libraries being used. Memory leaks occur when data is stored in memory but can't be accessed by the running code.
+
+### How to Investigate & Mitigate:
+
+1. **Profiling**: Use Go's built-in memory profiler to examine memory usage. This can help identify which parts of the program are consuming the most memory.
+   
+2. **Limit Goroutines**: Consider adding a semaphore or a worker pool to limit the number of goroutines that can be created simultaneously.
+
+3. **Streaming Downloads**: For downloading large files, instead of buffering the entire content, stream the content directly to disk.
+
+4. **Check for Leaks**: Use tools like `go-leak` to detect potential goroutine leaks in the program.
+
+5. **Tune the Garbage Collector**: The garbage collector's behavior can be tuned using the `GOGC` environment variable. Adjusting its value can make the GC run more or less frequently.
+
+6. **Review Libraries**: Check if there are any known memory-related issues in the versions of `colly` or `golang-lru` you're using. Upgrading to a newer version might help if there have been fixes.
+
+7. **Revisit Logic**: Ensure there aren't any unintentional data structures or variables that grow over time and aren't limited like the LRU cache.
+
+Remember, even with the LRU cache, the memory usage of a program is influenced by various factors and isn't solely dependent on the cache's behavior.
