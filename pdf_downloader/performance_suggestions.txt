@@ -1,0 +1,33 @@
+Sure, here are some ways you can improve the performance of the given program:
+
+Use Goroutines for Concurrent Processing:
+Consider using Goroutines to make concurrent HTTP requests and processing of URLs. Instead of using a single Collector, you can create multiple instances and use Goroutines to process URLs concurrently. This can significantly improve the crawling speed.
+
+Minimize Locking:
+While you're using a Mutex to protect the visited URLs map, using fine-grained locking can help reduce contention and improve performance. One approach is to shard the URLs based on their hash values and use multiple Mutexes to lock different shards.
+
+Batch Writing to the Visited URLs File:
+Instead of writing each URL to the file individually, you can batch the URLs and write them in larger chunks. This can reduce the number of disk writes and improve the overall performance of saving visited URLs.
+
+Use a Bloom Filter:
+If memory efficiency is a concern, you could use a Bloom filter to store visited URLs. A Bloom filter can give you a probabilistic answer about whether a URL has been visited or not. This can reduce the memory footprint compared to storing all URLs in memory.
+
+Reuse HTTP Connections:
+Reusing HTTP connections can help improve the efficiency of making multiple requests to the same domain. Consider using an HTTP connection pool to manage and reuse connections.
+
+Avoid String Concatenation:
+String concatenation in loops, especially within the saveVisitedURL function, can lead to performance overhead due to memory allocation and copying. Instead, you can use a bytes.Buffer for efficient string appending.
+
+Reduce Excluded Domain Checking:
+Instead of checking every excluded domain for every link, you can use a data structure like a hash set to store excluded domains for quicker membership checking.
+
+Use a Wait Group:
+If you're using Goroutines for concurrent processing, consider using a sync.WaitGroup to wait for all Goroutines to finish before exiting the program.
+
+Optimize PDF Downloads:
+When downloading PDF files, you can use Goroutines to parallelize the download process, similar to how you're processing HTML links. This can improve the speed of downloading PDF files.
+
+Error Handling:
+Make sure to handle errors properly, especially during file operations and network requests. Proper error handling can prevent unexpected failures and crashes.
+
+Remember that performance improvements can vary depending on the specific use case and the environment in which the program runs. It's a good practice to profile the application and monitor its performance after making changes to ensure that you're achieving the desired performance improvements.
