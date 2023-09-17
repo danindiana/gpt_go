@@ -1,0 +1,54 @@
+The error messages you are seeing likely indicate that you have a corrupted or conflicting Go installation on your system. The files that are complaining about redeclaration (`/usr/local/go/src/runtime/internal/sys/consts.go`, `/usr/local/go/src/runtime/internal/atomic/atomic_amd64x.go`, etc.) are part of the Go runtime and should not be conflicting in a proper installation.
+
+Here's how to resolve the issue:
+
+### Step 1: Remove Existing Go Installation
+
+Before installing a new version of Go, it's a good idea to remove any existing installations to avoid conflicts.
+
+1. To remove a pre-existing Go installation, you can usually just remove the Go directory:
+
+    ```bash
+    sudo rm -rf /usr/local/go
+    ```
+
+2. Also, make sure to remove the Go binary directory from your `PATH` environment variable if it's there. You can usually find this in your `.bashrc`, `.zshrc`, or `.profile` file.
+
+### Step 2: Download and Install Go
+
+Download the Go tarball for your system from [the official Go website](https://golang.org/dl/). Assuming you've downloaded the tar.gz file for Linux (`go1.21.1.linux-amd64.tar.gz`), you can install it with the following commands:
+
+```bash
+wget https://go.dev/dl/go1.21.1.linux-amd64.tar.gz  # Download the tarball
+sudo tar -C /usr/local -xzf go1.21.1.linux-amd64.tar.gz  # Extract the tarball
+```
+
+### Step 3: Update PATH
+
+Add `/usr/local/go/bin` to the `PATH` environment variable. You can add this line to your `.bashrc`, `.zshrc`, or `.profile` file to make it permanent:
+
+```bash
+export PATH=$PATH:/usr/local/go/bin
+```
+
+Then, source your profile:
+
+```bash
+source ~/.bashrc  # Or the appropriate file for your shell
+```
+
+### Step 4: Verify Installation
+
+Check that Go is installed correctly:
+
+```bash
+go version
+```
+
+If this shows the correct version, then Go is installed correctly.
+
+### Step 5: Re-try Your Operation
+
+Navigate to your project directory and try running `go build` or `go run` or `go install` as you were originally trying to do.
+
+If you have done all the above steps and you are still encountering issues, it may be helpful to read the output of `go env` for more information. This will show you all the environment variables Go is using, which might help in diagnosing the problem.
