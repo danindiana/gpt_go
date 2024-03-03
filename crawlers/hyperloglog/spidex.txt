@@ -1,0 +1,40 @@
+This Go program is a web crawler that uses the `colly` library to scrape websites and the `hyperloglog` library to estimate the number of unique links it has visited. Here's a step-by-step explanation of how the program works:
+
+1. **Initialization**:
+   - The program initializes a HyperLogLog sketch to keep track of unique links.
+   - Variables for telemetry (links processed, memory statistics) are declared.
+   - A new `colly` collector is created with options for maximum depth and asynchronous network requests.
+
+2. **User Input**:
+   - The program prompts the user to enter the starting URL.
+   - The URL is preprocessed to ensure it has a valid scheme and hostname.
+
+3. **File Creation**:
+   - A file is created to log the output of the crawler. The file name includes the current date/time and a sanitized version of the starting URL.
+
+4. **Crawling**:
+   - The crawler starts visiting the starting URL.
+   - A ticker is set up to report telemetry every 5 seconds, including the number of links processed, the estimated number of unique links, and the number of cache misses.
+
+5. **HTML Handling**:
+   - The `colly` collector is configured to handle HTML elements with an `href` attribute.
+   - For each such element, a goroutine is started to process the link:
+     - The link is preprocessed and checked for validity.
+     - The number of links processed is incremented.
+     - The link is added to the HyperLogLog sketch.
+     - The link is logged to the console and the file.
+     - The link is visited by the crawler.
+
+6. **Waiting**:
+   - The program waits for all requests to finish using a wait group.
+   - The ticker is stopped after the crawling is done.
+
+7. **Telemetry Logging**:
+   - The final telemetry data is logged to the console and the file, including the total number of links processed and the estimated number of unique links.
+
+8. **Cleanup**:
+   - The file is closed after the program finishes execution.
+
+The `hyperloglog` library is used to estimate the number of unique links by using a probabilistic data structure that trades off accuracy for memory usage. The `colly` library is used for web scraping, allowing the program to navigate and extract information from web pages.
+
+Please note that this program is a simple example and may not handle all edge cases or complications that a full-fledged web crawler would need to handle, such as handling different types of links, dealing with JavaScript-rendered content, or respecting robots.txt rules.
