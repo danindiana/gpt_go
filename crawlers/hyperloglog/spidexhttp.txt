@@ -188,3 +188,35 @@ Please ensure you have the latest version of Colly and other dependencies to avo
 In this refactored code, the key change is the use of `c.WithTransport(customTransport)` to apply a custom HTTP transport to the Colly collector. This allows for more granular control over HTTP client behavior, including how connections are managed, which is crucial for effective HTTP/2 handling.
 
 Note: This refactored snippet focuses on the integration of a custom transport and periodic goroutine monitoring. Be sure to fill in the rest of the logic for your scraping needs, including handling HTML elements (`c.OnHTML(...)`), managing file I/O, and ensuring proper error handling as per your original implementation.
+
+
+Re; Runtime panic?
+
+The crash log you've shared suggests that your Go application is experiencing a runtime panic, likely due to concurrent write operations to a channel without proper synchronization. The key parts of the error messages point to operations within the `github.com/gocolly/colly` package, specifically within the `(*httpBackend).Do` and `(*httpBackend).Cache` methods, which are internally called by Colly's `(*Collector).fetch` method. This kind of error often occurs in concurrent environments where multiple goroutines are attempting to send data on the same channel simultaneously.
+
+### Understanding the Issue
+
+- **Concurrency and Channels**: Colly uses channels and goroutines extensively to manage asynchronous fetching and processing of web pages. If not properly synchronized, concurrent access to shared resources, such as channels, can lead to race conditions and panics.
+- **Custom Modifications**: Adjusting values related to concurrency, like the parallelism limit or making changes to the Colly collector's configuration that affect how requests are dispatched and managed, can exacerbate these issues, especially if the adjustments lead to an increase in concurrent operations.
+
+### Potential Causes
+
+1. **Overloading Channels**: If the parallelism limit is set too high, or if there's an excessive number of requests being made simultaneously, it's possible that internal channels used by Colly (for tasks like managing HTTP requests or caching) are being overloaded, leading to these panics.
+
+2. **Improper Synchronization**: The errors could also be a result of improper synchronization in the custom logic you've added or modifications to the Colly library itself (if any). Ensure that any shared state or resources are properly protected (e.g., using mutexes or other synchronization primitives) if you've added custom concurrent operations.
+
+### Solutions
+
+1. **Review Concurrency Settings**: Review the parallelism settings and other related configurations in your Colly setup. Try reducing the level of concurrency to see if the issue persists. This includes lowering the `Parallelism` value in the `LimitRule` you apply to the collector.
+
+2. **Update Libraries**: Ensure you are using the latest version of Colly and other dependencies. Sometimes, bugs related to concurrency and resource management are fixed in newer versions.
+
+3. **Debugging and Analysis**: Use tools like the Go race detector (`go run -race ./yourprogram.go`) to identify data races that might be leading to these panics. The race detector can provide insights into where unsafe concurrent operations are occurring.
+
+4. **Error Handling and Recovery**: Implement error handling and recovery logic to gracefully handle panics and prevent the entire program from crashing. This can be achieved using `defer` statements along with `recover` in strategic locations of your code, especially around goroutine launches or where you suspect a panic might occur.
+
+5. **Limit Resource Usage**: Besides limiting parallelism, also consider limiting other resources like the number of open connections, using timeouts for HTTP requests, and controlling the rate of requests to give more stability to your application's execution.
+
+6. **Inspect Custom Code**: If you've added custom code that interacts with Colly or modifies its behavior, review this code for potential concurrency issues or misuses of Colly's API that might lead to these errors.
+
+These steps should help you identify and mitigate the issues causing the crashes in your application.
