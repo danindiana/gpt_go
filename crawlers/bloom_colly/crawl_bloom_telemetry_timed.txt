@@ -1,0 +1,56 @@
+README.txt for crawl_bloom_telemetry_timed.go
+
+This program is a web crawler that uses a Bloom filter for efficient link tracking. It also includes telemetry to report the number of links processed and unique links found at regular intervals.
+
+How to use:
+1. Run the program in a terminal.
+2. When prompted, enter the starting URL for the web crawler.
+3. The program will start crawling the web pages and will display telemetry reports at regular intervals in the console.
+4. The program will also write the output to a file named with the current date/time and the initial URL.
+
+Telemetry reports include:
+- Total number of links processed.
+- Number of unique links found.
+
+The telemetry reports are displayed every 5 seconds by default, but you can adjust the interval in the source code.
+
+Please note:
+- The program uses the colly library for web crawling.
+- The program uses the willf/bloom package for the Bloom filter.
+- The program uses the sync package for synchronization.
+
+For more information, please refer to the source code comments and the documentation for the colly and willf/bloom packages.
+
+This program is a web crawler written in Go that uses a combination of the Colly scraping framework, a Bloom filter for URL deduplication, and concurrency management with Go's `sync.WaitGroup`. It fetches and processes web pages starting from a user-defined URL, identifying unique links on those pages, and visiting them recursively up to a specified depth. Here's a step-by-step breakdown of how it works:
+
+1. **Initialization of a Bloom filter**: A Bloom filter named `filter` is created with a specified size (`filterSize`) and 5 hash functions. Bloom filters are probabilistic data structures used to test whether an element is a member of a set and are highly efficient in terms of space when dealing with large datasets. However, they allow for a small possibility of false positives.
+
+2. **Variable Declaration**: Two variables, `linksProcessed` and `uniqueLinks`, are initialized for tracking the total number of links processed and the number of unique links found, respectively.
+
+3. **Collector Setup**: A new Colly collector `c` is initialized with configurations such as `MaxDepth` (maximum depth of recursion for visiting links) set to 12 and enabling asynchronous requests with `colly.Async(true)`. The `c.Limit` method limits the maximum parallelism to 12, controlling the load on the target server and the local machine.
+
+4. **Wait Group Initialization**: A `sync.WaitGroup` named `wg` is used to ensure that the program waits for all go routines (concurrent operations) to finish before terminating.
+
+5. **User Input for Starting URL**: The program prompts the user to enter a starting URL, which is then preprocessed by trimming whitespace and ensuring it has a valid scheme and host using the `preprocessURL` function.
+
+6. **File Creation for Output**: A file is created to log the crawler's output, using the current date/time and the sanitized initial URL to generate a unique file name. The `defer file.Close()` statement ensures the file is closed properly when the program finishes or encounters an error.
+
+7. **Crawling Process**:
+   - The crawling starts by visiting the initial URL provided by the user.
+   - A ticker is set up to periodically report the number of links processed and the number of unique links found.
+   - The program defines an action for every HTML anchor (`<a>`) element with an `href` attribute encountered by the collector. For each link:
+     - The wait group counter is incremented.
+     - The link URL is preprocessed.
+     - The total links processed counter is incremented.
+     - The Bloom filter checks if the link is unique; if so, the unique links counter is incremented, and the link is logged to both the console and the output file. The link is then added to the collector's queue for visiting.
+   - The program uses `c.Wait()` and `wg.Wait()` to ensure that all collector tasks and concurrent operations have completed before proceeding.
+
+8. **Finalization**:
+   - The telemetry ticker is stopped.
+   - Final telemetry data (total links processed and unique links found) is printed to the console and written to the output file.
+
+9. **Utility Functions**: 
+   - `preprocessURL`: This function normalizes URLs by ensuring they have a scheme (defaults to `http` if missing), and it removes `www.` from the hostname for consistency.
+   - `urlToFileName`: This function sanitizes URLs to be used as file names, removing or replacing characters that are not allowed in file names (e.g., `/`, `:`, `.`) with underscores.
+
+This program efficiently crawls web pages to a specified depth, logging each unique link visited. It demonstrates the use of Go's concurrency features, third-party libraries for web scraping and URL processing, and custom logic for URL deduplication and normalization.
