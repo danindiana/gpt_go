@@ -231,3 +231,49 @@ Adjustments to the code:
 6. **Inspect Custom Code**: If you've added custom code that interacts with Colly or modifies its behavior, review this code for potential concurrency issues or misuses of Colly's API that might lead to these errors.
 
 These steps should help you identify and mitigate the issues causing the crashes in your application.
+
+The output you're seeing is indicative of goroutines that are stuck or in a waiting state, often related to network I/O operations that are not completing as expected. This can happen for a variety of reasons, such as network congestion, server issues, or resource limits being reached on either the client or server side. 
+
+To address these issues, consider the following adjustments to your program:
+
+1. **Implement More Robust Error Handling and Logging**: Ensure that all network requests include proper error handling. Log errors when they occur to provide more insight into when and why failures happen.
+
+2. **Set Request Timeouts**: Configure timeouts for your HTTP requests to prevent them from hanging indefinitely. This can be done by setting a timeout on the custom HTTP transport you've created.
+
+3. **Limit Concurrent Requests**: While you've already limited parallelism, ensure that the limits are set to a level that your network and the target servers can handle. Overloading either can lead to issues like the ones you're experiencing.
+
+4. **Use Contexts for Better Control Over Requests**: Utilize Go's `context` package to create cancellable or timeout-based contexts for your HTTP requests. This gives you more control over request lifecycles.
+
+5. **Monitor and Adjust System Resources**: If your crawler is running on a system with limited resources, monitor those resources (e.g., open file descriptors, memory usage) and adjust system limits as necessary.
+
+Here's an example snippet showing how to set request timeouts by adjusting the custom HTTP transport and using contexts for requests within Colly:
+
+```go
+customTransport := &http.Transport{
+    // Existing configuration...
+    ResponseHeaderTimeout: 10 * time.Second, // Timeout for reading the headers of the response
+    DialContext: (&net.Dialer{
+        Timeout:   5 * time.Second, // Limit the time spent establishing a TCP connection
+        KeepAlive: 15 * time.Second,
+    }).DialContext,
+}
+
+// When making requests:
+ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+defer cancel()
+
+// Assuming you have a function to make requests using Colly, pass the context
+c.OnHTML("a[href]", func(e *colly.HTMLElement) {
+    // Add context to request
+    err := e.Request.WithContext(ctx).Visit(link)
+    if err != nil {
+        log.Printf("Error visiting link: %s, error: %v\n", link, err)
+        // Handle error...
+    }
+    // Additional logic...
+})
+```
+
+Please note that the `WithContext` method for Colly's Request objects is an example and may not directly apply depending on your version of Colly or the specific implementation. You might need to set the context directly on the `http.Client` or manage contexts more granitely at the point where requests are made.
+
+If these approaches do not resolve the issue, consider isolating the problem by reducing the complexity of your requests or targeting different servers to determine if the issue is network-related, server-specific, or due to the configuration of your crawler.
