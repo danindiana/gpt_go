@@ -217,6 +217,17 @@ The crash log you've shared suggests that your Go application is experiencing a 
 
 5. **Limit Resource Usage**: Besides limiting parallelism, also consider limiting other resources like the number of open connections, using timeouts for HTTP requests, and controlling the rate of requests to give more stability to your application's execution.
 
+
+To modify the code so that it only prints new URLs visited and does not print the "URL already visited" error to the console, you can utilize Colly's built-in features for managing visitation state and leverage callbacks to control what gets logged. By default, Colly does not revisit URLs that have already been visited, but it logs every attempt to do so. To suppress these messages and only log new URLs visited, you can adjust the logging within the OnHTML callback and use an additional check or manage visitation state more explicitly.
+
+Here's how you can adjust your program:
+
+Suppress "URL already visited" Messages: This involves not logging attempts to visit already visited URLs.
+Log New URLs: Ensure that only new URLs being actually visited are logged.
+Adjustments to the code:
+
+
+
 6. **Inspect Custom Code**: If you've added custom code that interacts with Colly or modifies its behavior, review this code for potential concurrency issues or misuses of Colly's API that might lead to these errors.
 
 These steps should help you identify and mitigate the issues causing the crashes in your application.
