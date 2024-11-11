@@ -28,7 +28,7 @@ A Go program to scan a directory for PDF files, validate them, and optionally de
 
 1. **Clone the Repository**:
    ```sh
-   git clone https://github.com/yourusername/pdf_validator.git
+   git clone https://github.com/danindiana/gpt_go/tree/main/pdf_validator
    cd pdf_validator
    ```
 
