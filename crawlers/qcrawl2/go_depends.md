@@ -1,0 +1,29 @@
+go list -m all
+mycrawler
+github.com/PuerkitoBio/goquery v1.8.1
+github.com/andybalholm/cascadia v1.3.1
+github.com/antchfx/htmlquery v1.3.0
+github.com/antchfx/xmlquery v1.3.17
+github.com/antchfx/xpath v1.2.4
+github.com/davecgh/go-spew v1.1.0
+github.com/gobwas/glob v0.2.3
+github.com/gocolly/colly v1.2.0
+github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
+github.com/golang/protobuf v1.3.1
+github.com/kennygrant/sanitize v1.2.4
+github.com/pmezard/go-difflib v1.0.0
+github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d
+github.com/stretchr/objx v0.1.0
+github.com/stretchr/testify v1.3.0
+github.com/temoto/robotstxt v1.1.2
+github.com/yuin/goldmark v1.4.13
+golang.org/x/crypto v0.12.0
+golang.org/x/mod v0.8.0
+golang.org/x/net v0.14.0
+golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
+golang.org/x/sys v0.11.0
+golang.org/x/term v0.11.0
+golang.org/x/text v0.12.0
+golang.org/x/tools v0.6.0
+golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
+google.golang.org/appengine v1.6.7
