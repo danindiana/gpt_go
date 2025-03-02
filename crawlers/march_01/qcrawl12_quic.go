@@ -26,10 +26,6 @@ const (
 )
 
 var (
-	excludedDomains = []string{
-		"facebook.com", "youtube.com", "reddit.com", "linkedin.com",
-		"wikipedia.org", "twitter.com", "pubchem.ncbi.nlm.nih.gov", "ncbi.nlm.nih.gov",
-	}
 	visitedURLsMap = &sync.Map{}
 	delayedQueue   = make(chan string, 1000) // Increased channel size
 )
@@ -71,10 +67,9 @@ func main() {
 
 	// Set up QUIC transport
 	quicTransport := &http3.RoundTripper{
-	    QUICConfig: &quic.Config{}, // Correct field name
-	    TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // Skip certificate verification
+		QUICConfig:      &quic.Config{}, // Correct field name
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // Skip certificate verification
 	}
-
 
 	// Prompt for download directory
 	dirs, err := os.ReadDir(".")
@@ -152,16 +147,6 @@ func main() {
 
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
 		link := e.Attr("href")
-
-		u, err := url.Parse(link)
-		if err != nil {
-			log.Printf("Error parsing URL %s: %s", link, err)
-			return
-		}
-
-		if isExcludedDomain(u.Host) {
-			return
-		}
 
 		absoluteURL := e.Request.AbsoluteURL(link)
 		if !hasVisited(absoluteURL) {
@@ -330,15 +315,6 @@ func processDelayedQueue(selectedDir string, quicTransport *http3.RoundTripper) 
 			log.Println("No delayed requests to process")
 		}
 	}
-}
-
-func isExcludedDomain(host string) bool {
-	for _, domain := range excludedDomains {
-		if host == domain {
-			return true
-		}
-	}
-	return false
 }
 
 func getInterfaceIP(iface net.Interface) net.IP {
