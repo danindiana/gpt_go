@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gocolly/colly"
@@ -14,28 +15,16 @@ import (
 )
 
 const (
-	filterSize = 100000 // The size of the Bloom filter
+	filterSize = 1000000
 )
 
 func main() {
 	// Initialize the Bloom filter
 	filter := bloom.New(filterSize, 5)
-
-	// Variables for telemetry
-	var linksProcessed, uniqueLinks int
+	
+	// Variables for telemetry (using atomic for thread safety)
+	var linksProcessed, uniqueLinks int64
 	var mu sync.Mutex // Mutex to protect shared variables
-
-	// Create a new collector
-	c := colly.NewCollector(
-		colly.MaxDepth(12), // Set the maximum depth to 12
-		colly.Async(true),  // Enable asynchronous network requests
-	)
-
-	// Limit the maximum parallelism to 12
-	c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: 12})
-
-	// Create a wait group to wait for all requests to finish
-	var wg sync.WaitGroup
 
 	// Read the starting URL from the user
 	fmt.Print("Enter the starting URL: ")
@@ -43,6 +32,44 @@ func main() {
 	startURL, _ := reader.ReadString('\n')
 	startURL = strings.TrimSpace(startURL)
 	startURL = preprocessURL(startURL)
+	
+	if startURL == "" {
+		fmt.Println("Invalid starting URL")
+		return
+	}
+
+	// Parse the starting URL to get the domain for restriction
+	parsedStart, err := url.Parse(startURL)
+	if err != nil {
+		fmt.Println("Error parsing starting URL:", err)
+		return
+	}
+	baseDomain := parsedStart.Hostname()
+	// Remove www. for domain matching
+	if strings.HasPrefix(baseDomain, "www.") {
+		baseDomain = strings.TrimPrefix(baseDomain, "www.")
+	}
+
+	fmt.Printf("Crawling domain: %s\n", baseDomain)
+
+	// Create a new collector
+	c := colly.NewCollector(
+		colly.MaxDepth(3),
+		colly.Async(true),
+	)
+
+	// Restrict to the same domain
+	c.AllowedDomains = []string{baseDomain, "www." + baseDomain}
+
+	// Set reasonable timeouts
+	c.SetRequestTimeout(30 * time.Second)
+
+	// Limit the maximum parallelism
+	c.Limit(&colly.LimitRule{
+		DomainGlob:  "*",
+		Parallelism: 2,
+		Delay:       1 * time.Second,
+	})
 
 	// Generate a file name based on the current system date/time and the initial URL
 	fileName := fmt.Sprintf("%s_%s.txt", time.Now().Format("2006-01-02T150405"), urlToFileName(startURL))
@@ -54,44 +81,75 @@ func main() {
 	defer file.Close()
 
 	// Set up a ticker to report telemetry at regular intervals
-	ticker := time.NewTicker(5 * time.Second) // Adjust the interval as needed
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
+
+	// Stop the ticker when crawling is done
+	done := make(chan bool)
 	go func() {
-		for range ticker.C {
-			mu.Lock()
-			fmt.Printf("Links processed: %d, Unique links: %d\n", linksProcessed, uniqueLinks)
-			mu.Unlock()
+		for {
+			select {
+			case <-ticker.C:
+				processed := atomic.LoadInt64(&linksProcessed)
+				unique := atomic.LoadInt64(&uniqueLinks)
+				fmt.Printf("Links processed: %d, Unique links: %d\n", processed, unique)
+			case <-done:
+				return
+			}
 		}
 	}()
 
 	// On every a element which has href attribute call callback
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
 		link := e.Attr("href")
-		// Preprocess the URL to handle variations
-		link = preprocessURL(link)
-		if link == "" {
+		
+		// Skip empty links
+		if strings.TrimSpace(link) == "" {
 			return
 		}
 
+		// Get absolute URL
+		absLink := e.Request.AbsoluteURL(link)
+		processedLink := preprocessURL(absLink)
+
+		if processedLink == "" {
+			return
+		}
+
+		// Parse URL to check domain
+		parsedURL, err := url.Parse(processedLink)
+		if err != nil {
+			return
+		}
+		
+		linkDomain := parsedURL.Hostname()
+		if strings.HasPrefix(linkDomain, "www.") {
+			linkDomain = strings.TrimPrefix(linkDomain, "www.")
+		}
+
+		// Skip if not the same domain
+		if linkDomain != baseDomain {
+			return
+		}
+
+		atomic.AddInt64(&linksProcessed, 1)
+
+		// Check if the URL is already visited using Bloom filter
 		mu.Lock()
-		linksProcessed++ // Increment total links processed
+		isNew := !filter.TestAndAdd([]byte(processedLink))
 		mu.Unlock()
 
-		// Check if the URL is already visited
-		if !filter.TestAndAdd([]byte(link)) {
-			mu.Lock()
-			uniqueLinks++ // Increment unique links count
-			output := fmt.Sprintf("Visiting: %s\n", link)
-			fmt.Print(output)        // Output to console
-			file.WriteString(output) // Write the same output to the file
-			mu.Unlock()
+		if isNew {
+			atomic.AddInt64(&uniqueLinks, 1)
+			output := fmt.Sprintf("Found: %s\n", processedLink)
+			fmt.Print(output)
 			
-			// Visit the link
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				c.Visit(link)
-			}()
+			mu.Lock()
+			file.WriteString(output)
+			mu.Unlock()
+
+			// Visit the link (Colly will handle the queuing in async mode)
+			c.Visit(processedLink)
 		}
 	})
 
@@ -100,29 +158,53 @@ func main() {
 		fmt.Printf("Error visiting %s: %v\n", r.Request.URL, err)
 	})
 
+	// Log successful requests
+	c.OnResponse(func(r *colly.Response) {
+		fmt.Printf("Visited: %s\n", r.Request.URL)
+	})
+
 	// Start the crawler
 	fmt.Printf("Starting crawl at: %s\n", startURL)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		c.Visit(startURL)
-	}()
 
-	// Wait for all requests to finish
-	wg.Wait()
+	// Add the initial URL to the filter
+	mu.Lock()
+	filter.Add([]byte(startURL))
+	mu.Unlock()
 
-	// Log the telemetry data
+	// Start crawling
+	err = c.Visit(startURL)
+	if err != nil {
+		fmt.Printf("Error starting crawl: %v\n", err)
+		return
+	}
+
+	// Wait for all async requests to complete
+	c.Wait()
+
+	// Stop the telemetry goroutine
+	close(done)
+
+	// Log the final telemetry data
+	finalProcessed := atomic.LoadInt64(&linksProcessed)
+	finalUnique := atomic.LoadInt64(&uniqueLinks)
 	telemetryOutput := fmt.Sprintf("Crawl finished.\nTotal links processed: %d\nUnique links found: %d\n",
-		linksProcessed, uniqueLinks)
+		finalProcessed, finalUnique)
 	fmt.Print(telemetryOutput)
+	
+	mu.Lock()
 	file.WriteString(telemetryOutput)
+	mu.Unlock()
 }
 
 // preprocessURL preprocesses the input URL to handle variations
 func preprocessURL(inputURL string) string {
-	// Handle relative URLs by making them absolute
-	if !strings.Contains(inputURL, "://") && !strings.HasPrefix(inputURL, "//") {
-		inputURL = "http://" + inputURL
+	if inputURL == "" {
+		return ""
+	}
+
+	// Handle fragment identifiers
+	if idx := strings.Index(inputURL, "#"); idx != -1 {
+		inputURL = inputURL[:idx]
 	}
 
 	parsedURL, err := url.Parse(inputURL)
@@ -130,22 +212,19 @@ func preprocessURL(inputURL string) string {
 		return ""
 	}
 
-	if parsedURL.Scheme == "" {
-		parsedURL.Scheme = "http"
+	// Skip non-http(s) URLs
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return ""
 	}
 
 	if parsedURL.Host == "" {
 		return ""
 	}
 
-	hostname := strings.ToLower(parsedURL.Hostname())
-	if strings.HasPrefix(hostname, "www.") {
-		hostname = strings.TrimPrefix(hostname, "www.")
+	// Clean the path (remove trailing slash)
+	if parsedURL.Path != "/" {
+		parsedURL.Path = strings.TrimSuffix(parsedURL.Path, "/")
 	}
-	parsedURL.Host = hostname
-
-	// Clean the path to remove unnecessary segments
-	parsedURL.Path = strings.TrimSuffix(parsedURL.Path, "/")
 
 	return parsedURL.String()
 }
@@ -161,11 +240,11 @@ func urlToFileName(url string) string {
 	sanitized = strings.ReplaceAll(sanitized, "&", "_")
 	sanitized = strings.ReplaceAll(sanitized, "=", "_")
 	sanitized = strings.ReplaceAll(sanitized, "%", "_")
-	
+
 	// Limit length to avoid OS filename limits
 	if len(sanitized) > 100 {
 		sanitized = sanitized[:100]
 	}
-	
+
 	return sanitized
 }
